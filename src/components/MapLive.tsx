@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Ship, Anchor, MapPin, Search, Filter, Layers, Activity, ShieldCheck, Info, Navigation } from 'lucide-react';
+import { Ship, Anchor, MapPin, Search, Filter, Layers, Activity, ShieldCheck, Info, Navigation, Database } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, ZoomControl } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { vesselService, Vessel } from '../services/supabaseService';
 
 // Fix for default icon issue in Leaflet with React
 // @ts-ignore
@@ -67,14 +68,14 @@ const BlinkingMarker = ({ position, name, type, speed, status, colorClass }: any
 export const MapLive: React.FC = () => {
   const [selectedVessel, setSelectedVessel] = useState<string | null>(null);
   const [systemStatus, setSystemStatus] = useState({ satellites: 14, latency: 24 });
-
-  const vessels = [
-    { id: '1', name: 'Ever Laurel', type: 'Container Ship', lat: 23.4, lng: 120.1, speed: '18.4 kn', status: 'Em Trânsito', color: 'text-primary' },
-    { id: '2', name: 'Maersk Voyager', type: 'Cargo Vessel', lat: -12.1, lng: -38.5, speed: '14.2 kn', status: 'Aproximando', color: 'text-sky-500' },
-    { id: '3', name: 'MSC Isabella', type: 'Ultra Large Container', lat: 51.5, lng: 3.4, speed: '0.5 kn', status: 'Ancorado', color: 'text-emerald-500' },
-    { id: '4', name: 'CMA CGM Antoine', type: 'Container Ship', lat: 35.2, lng: 139.7, speed: '21.0 kn', status: 'Em Trânsito', color: 'text-primary' },
-    { id: '5', name: 'HMM Algeciras', type: 'Mega Vessel', lat: 1.3, lng: 103.8, speed: '12.5 kn', status: 'Aproximando', color: 'text-sky-500' },
-  ];
+  const [isSupabaseActive, setIsSupabaseActive] = useState(false);
+  const [vessels, setVessels] = useState<Vessel[]>([
+    { id: '1', name: 'Ever Laurel', type: 'Container Ship', latitude: 23.4, longitude: 120.1, speed: '18.4 kn', status: 'Em Trânsito', color_class: 'text-primary' },
+    { id: '2', name: 'Maersk Voyager', type: 'Cargo Vessel', latitude: -12.1, longitude: -38.5, speed: '14.2 kn', status: 'Aproximando', color_class: 'text-sky-500' },
+    { id: '3', name: 'MSC Isabella', type: 'Ultra Large Container', latitude: 51.5, longitude: 3.4, speed: '0.5 kn', status: 'Ancorado', color_class: 'text-emerald-500' },
+    { id: '4', name: 'CMA CGM Antoine', type: 'Container Ship', latitude: 35.2, longitude: 139.7, speed: '21.0 kn', status: 'Em Trânsito', color_class: 'text-primary' },
+    { id: '5', name: 'HMM Algeciras', type: 'Mega Vessel', latitude: 1.3, longitude: 103.8, speed: '12.5 kn', status: 'Aproximando', color_class: 'text-sky-500' },
+  ]);
 
   const chainFeed = [
     { time: '12:45', event: 'Smart Contract Validado', ref: 'SC-9921', status: 'Success' },
@@ -82,6 +83,23 @@ export const MapLive: React.FC = () => {
     { time: '12:38', event: 'Lacre IoT Verificado', ref: 'IOT-441', status: 'Success' },
     { time: '12:30', event: 'Transferência Custódia', ref: 'TX-102', status: 'Success' },
   ];
+
+  // Fetch vessels from Supabase
+  useEffect(() => {
+    const fetchVessels = async () => {
+      try {
+        const data = await vesselService.getVessels();
+        if (data && data.length > 0) {
+          setVessels(data);
+          setIsSupabaseActive(true);
+        }
+      } catch (error) {
+        console.warn('Supabase fetch failed for vessels, using mock data:', error);
+        setIsSupabaseActive(false);
+      }
+    };
+    fetchVessels();
+  }, []);
 
   // Simulate live updates
   useEffect(() => {
@@ -99,7 +117,13 @@ export const MapLive: React.FC = () => {
       {/* Left Panel: Search & Filters */}
       <aside className="w-full lg:w-80 bg-white border-r border-slate-200 flex flex-col z-10">
         <div className="p-6 border-b border-slate-100 space-y-4">
-          <h2 className="text-xl font-bold text-navy">Monitoramento Live</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold text-navy">Monitoramento Live</h2>
+            <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-[9px] font-bold uppercase ${isSupabaseActive ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
+              <Database className="w-3 h-3" />
+              {isSupabaseActive ? 'Live' : 'Mock'}
+            </div>
+          </div>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
             <input 
@@ -120,7 +144,7 @@ export const MapLive: React.FC = () => {
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           <p className="px-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Navios em Destaque</p>
-          {vessels.map((vessel, i) => (
+          {vessels.map((vessel) => (
             <motion.div 
               key={vessel.id}
               whileHover={{ x: 4 }}
@@ -133,7 +157,7 @@ export const MapLive: React.FC = () => {
             >
               <div className="flex justify-between items-start mb-2">
                 <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg bg-white shadow-sm ${vessel.color}`}>
+                  <div className={`p-2 rounded-lg bg-white shadow-sm ${vessel.color_class}`}>
                     <Ship className="w-5 h-5" />
                   </div>
                   <div>
@@ -152,7 +176,7 @@ export const MapLive: React.FC = () => {
               <div className="grid grid-cols-2 gap-2 mt-3">
                 <div className="space-y-0.5">
                   <p className="text-[9px] text-slate-400 font-bold uppercase">Posição</p>
-                  <p className="text-[10px] font-mono font-bold text-slate-700">{vessel.lat.toFixed(1)}°, {vessel.lng.toFixed(1)}°</p>
+                  <p className="text-[10px] font-mono font-bold text-slate-700">{vessel.latitude.toFixed(1)}°, {vessel.longitude.toFixed(1)}°</p>
                 </div>
                 <div className="space-y-0.5">
                   <p className="text-[9px] text-slate-400 font-bold uppercase">Velocidade</p>
@@ -182,12 +206,12 @@ export const MapLive: React.FC = () => {
           {vessels.map((vessel) => (
             <BlinkingMarker 
               key={vessel.id}
-              position={[vessel.lat, vessel.lng]}
+              position={[vessel.latitude, vessel.longitude]}
               name={vessel.name}
               type={vessel.type}
               speed={vessel.speed}
               status={vessel.status}
-              colorClass={vessel.color}
+              colorClass={vessel.color_class}
             />
           ))}
         </MapContainer>

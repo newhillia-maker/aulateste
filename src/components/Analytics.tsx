@@ -90,7 +90,11 @@ export const Analytics: React.FC = () => {
           <h1 className="text-3xl font-black text-navy tracking-tight">
             {timeRange === 'monthly' ? 'Analytics Mensal' : timeRange === 'quarterly' ? 'Dashboard Trimestral' : 'Performance Anual'}
           </h1>
-          <p className="text-slate-500 font-medium">Insights logísticos em tempo real e modelagem preditiva</p>
+          <div className="flex items-center gap-2 text-slate-400 text-[10px] font-medium">
+            <Clock className="w-3 h-3" />
+            <span>Última atualização: {new Date().toLocaleTimeString()}</span>
+          </div>
+          <p className="text-slate-500 font-medium mt-1">Insights logísticos em tempo real e modelagem preditiva</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center bg-white border border-slate-200 rounded-lg p-1 shadow-sm">

@@ -1,33 +1,42 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { User, Shield, Settings, History, Lock, UserPlus, Edit2, Trash2, CheckCircle2, X, Save } from 'lucide-react';
-
-interface UserData {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  status: string;
-  initial: string;
-}
+import { User, Shield, Settings, History, Lock, UserPlus, Edit2, Trash2, CheckCircle2, X, Save, Database } from 'lucide-react';
+import { userService, UserProfile } from '../services/supabaseService';
 
 export const Admin: React.FC = () => {
-  const [users, setUsers] = useState<UserData[]>([
+  const [users, setUsers] = useState<UserProfile[]>([
     { id: '1', name: 'Capt. Horatio Nelson', email: 'nelson@marinelogic.com', role: 'Admin', status: 'Ativo', initial: 'CN' },
     { id: '2', name: 'Sarah Jenkins', email: 'jenkins@marinelogic.com', role: 'Operador', status: 'Ativo', initial: 'SJ' },
     { id: '3', name: 'Mark Thorne', email: 'thorne@marinelogic.com', role: 'Visualizador', status: 'Inativo', initial: 'MT' },
   ]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState<UserData | null>(null);
-  const [formData, setFormData] = useState<Omit<UserData, 'id' | 'initial'>>({
+  const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
+  const [isSupabaseActive, setIsSupabaseActive] = useState(false);
+  const [formData, setFormData] = useState<Omit<UserProfile, 'id' | 'initial'>>({
     name: '',
     email: '',
     role: 'Operador',
     status: 'Ativo',
   });
 
-  const openModal = (user?: UserData) => {
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const data = await userService.getUsers();
+        if (data && data.length > 0) {
+          setUsers(data);
+          setIsSupabaseActive(true);
+        }
+      } catch (error) {
+        console.warn('Supabase fetch failed, using mock data:', error);
+        setIsSupabaseActive(false);
+      }
+    };
+    fetchUsers();
+  }, []);
+
+  const openModal = (user?: UserProfile) => {
     if (user) {
       setEditingUser(user);
       setFormData({
@@ -53,26 +62,49 @@ export const Admin: React.FC = () => {
     setEditingUser(null);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     const initial = formData.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
-    if (editingUser) {
-      setUsers(users.map(u => u.id === editingUser.id ? { ...u, ...formData, initial } : u));
-    } else {
-      const newUser: UserData = {
-        id: Date.now().toString(),
-        ...formData,
-        initial,
-      };
-      setUsers([...users, newUser]);
+    try {
+      if (editingUser) {
+        if (isSupabaseActive) {
+          const updated = await userService.updateUser(editingUser.id, { ...formData, initial });
+          setUsers(users.map(u => u.id === editingUser.id ? updated : u));
+        } else {
+          setUsers(users.map(u => u.id === editingUser.id ? { ...u, ...formData, initial } : u));
+        }
+      } else {
+        if (isSupabaseActive) {
+          const created = await userService.createUser({ ...formData, initial });
+          setUsers([created, ...users]);
+        } else {
+          const newUser: UserProfile = {
+            id: Date.now().toString(),
+            ...formData,
+            initial,
+          };
+          setUsers([newUser, ...users]);
+        }
+      }
+      closeModal();
+    } catch (error) {
+      console.error('Error saving user:', error);
+      alert('Erro ao salvar usuário. Verifique a conexão com o banco de dados.');
     }
-    closeModal();
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (window.confirm('Tem certeza que deseja excluir este usuário?')) {
-      setUsers(users.filter(u => u.id !== id));
+      try {
+        if (isSupabaseActive) {
+          await userService.deleteUser(id);
+        }
+        setUsers(users.filter(u => u.id !== id));
+      } catch (error) {
+        console.error('Error deleting user:', error);
+        alert('Erro ao excluir usuário.');
+      }
     }
   };
 
@@ -101,10 +133,25 @@ export const Admin: React.FC = () => {
         </div>
         
         <div className="pt-8 border-t border-slate-100">
-          <p className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Ambiente</p>
-          <div className="mt-4 flex items-center gap-3 px-3">
-            <div className="h-2 w-2 rounded-full bg-green-500"></div>
-            <span className="text-sm font-medium">Produção Node v2.4</span>
+          <p className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-4">Status da Infraestrutura</p>
+          <div className="space-y-3 px-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="h-2 w-2 rounded-full bg-green-500"></div>
+                <span className="text-xs font-medium text-slate-600">Servidor Node</span>
+              </div>
+              <span className="text-[10px] font-bold text-slate-400">v2.4</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className={`h-2 w-2 rounded-full ${isSupabaseActive ? 'bg-emerald-500' : 'bg-amber-500'}`}></div>
+                <span className="text-xs font-medium text-slate-600">Banco de Dados</span>
+              </div>
+              <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${isSupabaseActive ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
+                <Database className="w-2.5 h-2.5" />
+                {isSupabaseActive ? 'Live' : 'Mock'}
+              </div>
+            </div>
           </div>
         </div>
       </aside>
